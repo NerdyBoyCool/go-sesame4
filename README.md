@@ -1,5 +1,5 @@
 # go-sesame4
-Github Actionを使用して、Sesame4の施錠を自動化するGolang Script
+Github Actionを使用して、[Sesame4](https://jp.candyhouse.co/products/sesame4)の施錠を自動化するGolang Script
 
 ## Motivation
 深夜の鍵の閉め忘れを防ぐために、一定時間になったら施錠したい。アプリから施錠はできるが、そもそも「閉めたかどうか？」を気にしたくないというのがモチベーション。
