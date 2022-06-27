@@ -1,23 +1,14 @@
 package main
 
 import (
-	"bytes"
-	"crypto/aes"
-	"encoding/base64"
-	"encoding/binary"
-	"encoding/hex"
-	"encoding/json"
-	"fmt"
-	"io"
-	"io/ioutil"
+	"context"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
-	"time"
 
-	"github.com/chmike/cmac-go"
+	"github.com/NerdyBoyCool/sesame"
 )
 
 const notifyMessage string = "\n施錠に失敗しました。\n"
@@ -54,122 +45,37 @@ func notifyLine(m string) error {
 	return nil
 }
 
-type LockStatus int
-
-const (
-	Locked LockStatus = iota
-	Unlocked
-	Moved
-)
-
-type Sesame struct {
-	BatteryPercentage int
-	BatteryVoltage    float64
-	Position          int
-	Status            LockStatus
-	TimeStamp         int
-}
-
-func Device() (*Sesame, error) {
-	deviseUUID := os.Getenv("SESAME_UUID")
-	if deviseUUID == "" {
-		panic("SESAME_UUID is not set.")
-	}
-
-	c := &http.Client{}
-
-	req, err := http.NewRequest("GET", "https://app.candyhouse.co/api/sesame2/"+deviseUUID, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	apiKey := os.Getenv("SESAME_DEVELOPER_API_KEY")
-	if apiKey == "" {
-		panic("SESAME_DEVELOPE_API_KEY is not set.")
-	}
-	req.Header.Set("x-api-key", apiKey)
-
-	res, err := c.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer res.Body.Close()
-
-	body, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	var s Sesame
-	err = json.Unmarshal(body, &s)
-	return &s, err
-}
-
-type Param struct {
-	Cmd     int16  `json:"cmd"`
-	History string `json:"history"`
-	Sign    string `json:"sign"`
-}
-
-func toLittleEndian(t int64) []byte {
-	i := int32(t)
-	b := make([]byte, 4)
-	binary.LittleEndian.PutUint32(b, uint32(i))
-	return b
-}
-
-func toCMAC(secretKey string) (string, error) {
-	message := toLittleEndian(time.Now().Unix())
-	byteKey, err := hex.DecodeString(secretKey)
-	if err != nil {
-		return "", err
-	}
-	cm, err := cmac.New(aes.NewCipher, byteKey)
-	if err != nil {
-		return "", err
-	}
-	cm.Write(message[1:4])
-	m := cm.Sum(nil)
-	return hex.EncodeToString(m), nil
-}
-
 func main() {
-	var s *Sesame
-	s, err := Device()
+	key1 := os.Getenv("SESAME_SECRET_KEY1")
+	key2 := os.Getenv("SESAME_SECRET_KEY2")
+	apiKey := os.Getenv("SESAME_DEVELOPER_API_KEY")
+	sesame1 := os.Getenv("SESAME_UUID1")
+	sesame2 := os.Getenv("SESAME_UUID2")
+	cli1 := sesame.NewClient(apiKey, key1, sesame1)
+	cli2 := sesame.NewClient(apiKey, key2, sesame2)
+	ctx := context.Background()
+	s1, err := cli1.Device(ctx)
+	s2, err := cli2.Device(ctx)
 	if err != nil {
 		log.Fatal(err)
 		notifyLine(notifyMessage)
 	}
-	if s.BatteryPercentage < 20 {
+	if s1.BatteryPercentage < 20 || s2.BatteryPercentage < 20 {
+		log.Fatal(err)
 		notifyLine("バッテリー残量が少なくなっています。")
 	}
-
-	key := os.Getenv("SESAME_SECRET_KEY")
-	m, err := toCMAC(key)
-	if err != nil {
-		fmt.Errorf("cannot get cmac: %w", err)
-		return
+	if s1.CHSesame2Status == "unlocked" {
+		err = cli1.Lock(ctx, "From Gihub Actions")
+		if err != nil {
+			log.Fatal(err)
+			notifyLine("施錠に失敗しました。")
+		}
 	}
-	apiKey := os.Getenv("SESAME_DEVELOPER_API_KEY")
-	from := base64.StdEncoding.EncodeToString([]byte("by API"))
-	param := &Param{Cmd: 88, Sign: m, History: from}
-	data, _ := json.Marshal(param)
-	deviseUUID := os.Getenv("SESAME_UUID")
-	req, err := http.NewRequest("POST", "https://app.candyhouse.co/api/sesame2/"+deviseUUID+"/cmd", bytes.NewBuffer(data))
-	if err != nil {
-		fmt.Errorf("cannot create HTTP request: %w", err)
-		return
+	if s2.CHSesame2Status == "unlocked" {
+		err = cli2.Lock(ctx, "From Gihub Actions")
+		if err != nil {
+			log.Fatal(err)
+			notifyLine("施錠に失敗しました。")
+		}
 	}
-	req.Header.Set("x-api-key", apiKey)
-	var client *http.Client = &http.Client{}
-	res, err := client.Do(req)
-	defer res.Body.Close()
-	if err != nil {
-		fmt.Errorf("Request Error: %w", err)
-		return
-	}
-
-	// body, _ := io.ReadAll(res.Body)
-	// fmt.Println(string(body))
-
 }
