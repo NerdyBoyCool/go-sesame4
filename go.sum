@@ -1,0 +1,4 @@
+github.com/NerdyBoyCool/sesame v0.1.0 h1:uq1LZm3eVXjyfRlO95TKm2TbeF7Ha/gbXLRMe3DVZaA=
+github.com/NerdyBoyCool/sesame v0.1.0/go.mod h1:ziSoo5cxp70ukTaLfezzb+xr0iL2cCBXueRg8qgjc8U=
+github.com/chmike/cmac-go v1.1.0 h1:aF73ZAEx9N2WdQc93DOJ2fMsBDAGqUtuenjMJMb3kEI=
+github.com/chmike/cmac-go v1.1.0/go.mod h1:wcIN7NRqWSKGuORzd4dReBkoBDE9ZBqfyTVxyDxGeUw=
